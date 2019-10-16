@@ -4,8 +4,8 @@ import java.util.Properties
 
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.serializer.SerializerFeature
-import com.wmidop.datacollector.bean.Vehicle
-import com.wmidop.datacollector.drools.service.DroolsRedisVehicle
+//import com.wmidop.datacollector.bean.Vehicle
+//import com.wmidop.datacollector.drools.service.DroolsRedisVehicle
 import com.wmidop.datacollector.util.KafkaConnPool
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo, TopicMetadataRequest}
 import kafka.common.TopicAndPartition
@@ -21,7 +21,7 @@ import org.apache.spark.streaming.dstream.InputDStream
 import org.apache.spark.streaming.kafka.{HasOffsetRanges, KafkaUtils, OffsetRange}
 
 object VehicleFilterStreaming {
-  val stream = VehicleFilterStreaming.getClass.getClassLoader.getResourceAsStream("kafka-config.properties")
+ /* val stream = VehicleFilterStreaming.getClass.getClassLoader.getResourceAsStream("kafka-config.properties")
   val prop = new Properties()
   prop.load(stream)
   //获取配置参数
@@ -191,5 +191,5 @@ object VehicleFilterStreaming {
     //  返回相应的stream
     textKafkaDStream
   }
-
+*/
 }
