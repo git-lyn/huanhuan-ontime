@@ -44,7 +44,7 @@ object OntimeStreaming {
     while(true) {
       val nowTimes = System.currentTimeMillis();
       val time = new DateTime(nowTimes).toString("yyyy-MM-dd")
-     val ssc = StreamingContext.getOrCreate(DateUtils.getCheckpoingDir() + time,functionToCreateContext)
+     val ssc = StreamingContext.getOrCreate(DateUtils.getCheckpoingDir(),functionToCreateContext)
       ssc.start()
       ssc.awaitTerminationOrTimeout(resetTime)
       // ssc.stop(false,true)表示优雅地销毁StreamingContext对象，不能销毁SparkContext对象，
