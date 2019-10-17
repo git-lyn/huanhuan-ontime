@@ -22,6 +22,8 @@ object TestDemo {
     val deviceID = content.get("deviceID")
     val gid = content.get("gid")
     println("user_id: " + user_id + " deviceID: " + deviceID + " gid: " + gid)
+    val ed = new DateTime(System.currentTimeMillis())
+    println(ed.toString("yyyy-MM-dd"))
   }
 
 }

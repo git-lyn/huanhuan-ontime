@@ -5,6 +5,7 @@ import java.util.{Calendar, Date, Properties}
 import org.apache.kafka.common.serialization.StringDeserializer
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.serializer.SerializerFeature
+import com.wmidop.datacollector.util.DateUtils
 import org.apache.ivy.util.filter.FilterHelper
 import org.apache.spark.streaming.{State, StateSpec}
 import org.joda.time.DateTime
@@ -41,7 +42,9 @@ object OntimeStreaming {
   val groupid = prop.getProperty("kafka.consumer.groupid")
   def main(args: Array[String]): Unit = {
     while(true) {
-     val ssc = StreamingContext.getOrCreate("C:\\E\\mysoft\\workSpace\\huanhuan\\checkpoint\\test1",functionToCreateContext)
+      val nowTimes = System.currentTimeMillis();
+      val time = new DateTime(nowTimes).toString("yyyy-MM-dd")
+     val ssc = StreamingContext.getOrCreate(DateUtils.getCheckpoingDir() + time,functionToCreateContext)
       ssc.start()
       ssc.awaitTerminationOrTimeout(resetTime)
       // ssc.stop(false,true)表示优雅地销毁StreamingContext对象，不能销毁SparkContext对象，
@@ -236,7 +239,7 @@ object OntimeStreaming {
     val ssc = new StreamingContext(sparkConf,Seconds(5));
     // 设置检查点
 //    ssc.checkpoint("./streaming_checkpoint")
-    ssc.checkpoint("C:\\E\\mysoft\\workSpace\\huanhuan\\checkpoint\\test1")
+    ssc.checkpoint(DateUtils.getCheckpoingDir())
 
 
     //  从kafka中获取对应的信息流数据
@@ -247,8 +250,8 @@ object OntimeStreaming {
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> brokenList,
       //      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> prop.getProperty("kafka.source.key.deserializer"),
       //      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> prop.getProperty("kafka.source.value.deserializer"),
-      "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-      "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
+//      "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
+//      "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
       ConsumerConfig.GROUP_ID_CONFIG -> groupid,
       ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> prop.getProperty("kafka.source.auto.offset.reset")
     )
