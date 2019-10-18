@@ -24,6 +24,10 @@ object TestDemo {
     println("user_id: " + user_id + " deviceID: " + deviceID + " gid: " + gid)
     val ed = new DateTime(System.currentTimeMillis())
     println(ed.toString("yyyy-MM-dd"))
+
+    val c = "aa|bb|cc"
+    val arr =  c.split("\\|")
+    println(arr(0) + " " + arr(1))
   }
 
 }

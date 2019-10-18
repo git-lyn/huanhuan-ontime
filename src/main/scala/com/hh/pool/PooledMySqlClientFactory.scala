@@ -2,9 +2,10 @@
  * Copyright (c) 2018. Atguigu Inc. All Rights Reserved.
  */
 
-package com.hh.ontime
+package com.hh.pool
 
 import java.sql.{Connection, DriverManager, PreparedStatement, ResultSet}
+import java.util.Properties
 
 import com.hh.conf.ConfigurationManager
 import com.hh.constant.Constants
@@ -12,7 +13,7 @@ import org.apache.commons.pool2.impl.{DefaultPooledObject, GenericObjectPool, Ge
 import org.apache.commons.pool2.{BasePooledObjectFactory, PooledObject}
 
 /**
-  * Created by wuyufei on 06/09/2017.
+  * Created by lyn
   */
 
 trait QueryCallback {
@@ -159,16 +160,25 @@ object CreateMySqlPool {
   // 加载JDBC驱动，只需要一次
   Class.forName("com.mysql.jdbc.Driver")
 
+  val stream = CreateMySqlPool.getClass.getClassLoader.getResourceAsStream("commerce.properties")
+  val prop = new Properties()
+  prop.load(stream)
+
   private var genericObjectPool: GenericObjectPool[MySqlProxy] = null
 
   // 用于返回真正的对象池GenericObjectPool
   def apply(): GenericObjectPool[MySqlProxy] = {
     if (this.genericObjectPool == null) {
       this.synchronized {
-        val jdbcUrl = ConfigurationManager.config.getString(Constants.JDBC_URL)
-        val jdbcUser = ConfigurationManager.config.getString(Constants.JDBC_USER)
-        val jdbcPassword = ConfigurationManager.config.getString(Constants.JDBC_PASSWORD)
-        val size = ConfigurationManager.config.getInt(Constants.JDBC_DATASOURCE_SIZE)
+//        val jdbcUrl = ConfigurationManager.config.getString(Constants.JDBC_URL)
+//        val jdbcUser = ConfigurationManager.config.getString(Constants.JDBC_USER)
+//        val jdbcPassword = ConfigurationManager.config.getString(Constants.JDBC_PASSWORD)
+//        val size = ConfigurationManager.config.getInt(Constants.JDBC_DATASOURCE_SIZE)
+
+        val jdbcUrl = prop.getProperty(Constants.JDBC_URL)
+        val jdbcUser = prop.getProperty(Constants.JDBC_USER)
+        val jdbcPassword = prop.getProperty(Constants.JDBC_PASSWORD)
+        val size = prop.getProperty(Constants.JDBC_DATASOURCE_SIZE).toInt
 
         val pooledFactory = new PooledMySqlClientFactory(jdbcUrl, jdbcUser, jdbcPassword)
         val poolConfig = {

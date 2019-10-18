@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2018. Atguigu Inc. All Rights Reserved.
+ * Copyright (c)
  */
 
 package com.hh.constant
 
 /**
  * 常量接口
- * @author wuyufei
+ * @author lyn
  *
  */
 object Constants {

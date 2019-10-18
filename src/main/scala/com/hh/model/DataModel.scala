@@ -2,18 +2,18 @@
  * Copyright (c) 2018. Atguigu Inc. All Rights Reserved.
  */
 
-package com.hh.ontime
+package com.hh.model
 
 /**
   * 广告黑名单
-  * @author wuyufei
+  * @author lyn
   *
   */
 case class AdBlacklist(userid:Long)
 
 /**
   * 用户广告点击量
-  * @author wuyufei
+  * @author lyn
   *
   */
 case class AdUserClickCount(date:String,
@@ -24,7 +24,7 @@ case class AdUserClickCount(date:String,
 
 /**
   * 广告实时统计
-  * @author wuyufei
+  * @author lyn
   *
   */
 case class AdStat(date:String,
@@ -35,7 +35,7 @@ case class AdStat(date:String,
 
 /**
   * 各省top3热门广告
-  * @author wuyufei
+  * @author lyn
   *
   */
 case class AdProvinceTop3(date:String,
@@ -45,7 +45,7 @@ case class AdProvinceTop3(date:String,
 
 /**
   * 广告点击趋势
-  * @author wuyufei
+  * @author lyn
   *
   */
 case class AdClickTrend(date:String,
@@ -53,3 +53,16 @@ case class AdClickTrend(date:String,
                         minute:String,
                         adid:Long,
                         clickCount:Long)
+
+
+/**
+ * 首页埋点点击量实时查询
+ * @param date
+ * @param position
+ * @param userid
+ * @param clickCount
+ */
+case class IndexClickCount(date: String,
+                           position: String,
+                           userid: String,
+                           clickCount: Long)

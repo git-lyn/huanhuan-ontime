@@ -2,9 +2,12 @@
  * Copyright (c) 2018. Atguigu Inc. All Rights Reserved.
  */
 
-package com.hh.ontime
+package com.hh.dao
 
 import java.sql.ResultSet
+
+import com.hh.model._
+import com.hh.pool.{CreateMySqlPool, QueryCallback}
 
 //import com.atguigu.commons.pool.{CreateMySqlPool, QueryCallback}
 

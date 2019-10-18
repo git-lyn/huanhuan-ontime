@@ -4,6 +4,8 @@
 
 package com.hh.conf
 
+import java.util.Properties
+
 import org.apache.commons.configuration2.{FileBasedConfiguration, PropertiesConfiguration}
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -25,5 +27,9 @@ object ConfigurationManager {
 
   // 通过getConfiguration获取配置对象
   val config = builder.getConfiguration()
+
+  val stream = ConfigurationManager.getClass.getClassLoader.getResourceAsStream("commerce.properties")
+  val prop = new Properties()
+  prop.load(stream)
 
 }

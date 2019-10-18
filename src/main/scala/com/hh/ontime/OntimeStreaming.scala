@@ -5,10 +5,14 @@ import java.util.{Calendar, Date, Properties}
 import org.apache.kafka.common.serialization.StringDeserializer
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.serializer.SerializerFeature
+import com.hh.dao.IndexCountDao
+import com.hh.model.IndexClickCount
 import com.wmidop.datacollector.util.DateUtils
 import org.apache.ivy.util.filter.FilterHelper
 import org.apache.spark.streaming.{State, StateSpec}
 import org.joda.time.DateTime
+
+import scala.collection.mutable.ArrayBuffer
 //import com.wmidop.datacollector.bean.Vehicle
 //import com.wmidop.datacollector.drools.service.DroolsRedisVehicle
 import com.wmidop.datacollector.util.KafkaConnPool
@@ -266,8 +270,24 @@ object OntimeStreaming {
       rdd
     }
 
+    // 进行数据的过滤
+    val filterDstream = textKafkaDStream2.filter{dstream =>
+      val key = dstream._1
+      val value = dstream._2
+      val jsons = JSON.parseObject(value)
+      val content = jsons.getJSONObject("content")
+      val click_position = content.get("click_position")
+      var flag = false
+      if ("app_restart".equals(click_position)) {
+        flag = true
+      } else {
+        flag = false
+      }
+      flag
+    }
+
     // 得到元组结果集
-    val dstream = textKafkaDStream2.map{rdd =>
+    val dstream = filterDstream.map{rdd =>
       val key = rdd._1
       val value = rdd._2
       val jsons = JSON.parseObject(value)
@@ -279,7 +299,10 @@ object OntimeStreaming {
       val content = jsons.getJSONObject("content")
       val user_id = content.get("user_id")
       val deviceID = content.get("deviceID")
-      val gid = content.get("gid")
+      var gid = content.get("gid")
+      if(gid == "" || gid == null) {
+        gid = "-99"
+      }
       val click_position = content.get("click_position")
       // 组合成 2019-09-10_dfdfdoogod-dsfdod--sdf
       val result = dates + "|" + click_position + "|" + gid
@@ -312,11 +335,22 @@ object OntimeStreaming {
 
     // 打印kafka的结果集
     aggregatedDStream.foreachRDD{rdd =>
+
+      // 批量保存数据到数据库
+      val indexCounts = ArrayBuffer[IndexClickCount]()
+
       // 循环遍历每一个rdd
       rdd.foreachPartition{items =>
         for(item <- items) {
           println("key########: " + item._1 + "     value@@@@@: " + item._2)
           //          println("value@@@@@: " + item._2)
+          val result = item._1.split("\\|")
+          val date = result(0)
+          val position = result(1)
+          val userid = result(2)
+          val counts = item._2
+          indexCounts += IndexClickCount(date,position,userid,counts)
+          IndexCountDao.updateBatch(indexCounts.toArray)
         }
 
       }
