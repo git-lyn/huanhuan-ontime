@@ -1,7 +1,8 @@
 package com.hh.ontime
 
 import java.util.{Calendar, Date, Properties}
-
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.kafka.common.serialization.StringDeserializer
 import com.alibaba.fastjson.JSON
 import com.alibaba.fastjson.serializer.SerializerFeature
@@ -34,6 +35,7 @@ import org.apache.spark.streaming.kafka.{HasOffsetRanges, KafkaUtils, OffsetRang
  */
 object OntimeStreaming {
   val stream = OntimeStreaming.getClass.getClassLoader.getResourceAsStream("kafka-config.properties")
+  val file_path = "hdfs://huanhuan101:9000/user/checkpoint/stop"
   val prop = new Properties()
   prop.load(stream)
   //获取配置参数
@@ -50,10 +52,21 @@ object OntimeStreaming {
       val time = new DateTime(nowTimes).toString("yyyy-MM-dd")
      val ssc = StreamingContext.getOrCreate(DateUtils.getCheckpoingDir(),functionToCreateContext)
       ssc.start()
-      ssc.awaitTerminationOrTimeout(resetTime)
-      // ssc.stop(false,true)表示优雅地销毁StreamingContext对象，不能销毁SparkContext对象，
-      // ssc.stop(true,true)会停掉SparkContext对象，程序就直接停了。
-      ssc.stop(false,true)
+//      if(isExistsMarkFile(file_path)){
+//        stopByMarkFile(ssc);
+//        // 等待任务终止
+//        ssc.awaitTermination()
+//        return;
+//      }
+//       stopByMarkFile(ssc);
+        ssc.awaitTerminationOrTimeout(resetTime)
+        // 关闭sparkStreaming
+        // ssc.stop(false,true)表示优雅地销毁StreamingContext对象，不能销毁SparkContext对象，
+        // ssc.stop(true,true)会停掉SparkContext对象，程序就直接停了。
+        ssc.stop(false, true)
+        // 根据给定的时间进行停止程序
+        // 处理结果集
+//        ssc.awaitTermination()
     }
   }
 
@@ -237,8 +250,8 @@ object OntimeStreaming {
   // 创建和设置一个新的StreamingContext
   def functionToCreateContext(): StreamingContext ={
     val stateSpec = StateSpec.function(mapFunction)
-    //创建sparkConf对象
-    val sparkConf = new SparkConf().setMaster("local[*]").setAppName("OntimeStreaming")
+    //创建sparkConf对象 "local[*]"
+    val sparkConf = new SparkConf().setMaster(prop.getProperty("spark.ontime.master")).setAppName("OntimeStreaming")
     //创建StreamingContext对象
     val ssc = new StreamingContext(sparkConf,Seconds(5));
     // 设置检查点
@@ -299,7 +312,8 @@ object OntimeStreaming {
       val content = jsons.getJSONObject("content")
       val user_id = content.get("user_id")
       val deviceID = content.get("deviceID")
-      var gid = content.get("gid")
+//      var gid = content.get("gid")
+      var gid = content.get("user_id")
       if(gid == "" || gid == null) {
         gid = "-99"
       }
@@ -351,6 +365,7 @@ object OntimeStreaming {
           val counts = item._2
           indexCounts += IndexClickCount(date,position,userid,counts)
           IndexCountDao.updateBatch(indexCounts.toArray)
+//          IndexCountDao.insertBatch(indexCounts.toArray)
         }
 
       }
@@ -388,6 +403,40 @@ object OntimeStreaming {
     todayEnd.set(Calendar.SECOND, 59)
     todayEnd.set(Calendar.MILLISECOND, 999)
     todayEnd.getTimeInMillis - now.getTime
+  }
+
+
+  /**
+   * 关闭SparkStreaming
+   *
+   * @param ssc
+   */
+  def stopByMarkFile(ssc: StreamingContext): Unit = {
+    val intervalMills = 10 * 1000 // 每隔10秒扫描一次消息是否存在
+    var isStop = false
+    //val file_path = "hdfs://huanhuan101:9000/user/checkpoint/stop" //判断消息文件是否存在，如果存在就关闭
+    while (!isStop) {
+      isStop = ssc.awaitTerminationOrTimeout(intervalMills)
+      if (!isStop && isExistsMarkFile(file_path)) {
+        println("2秒后开始关闭sparstreaming程序.....")
+        Thread.sleep(2000)
+        ssc.stop(true, true)
+      }
+    }
+  }
+
+  /** *
+   * 判断是否存在mark file
+   *
+   * @param file_path mark文件的路径
+   * @return
+   */
+  def isExistsMarkFile(file_path: String): Boolean = {
+    val conf = new Configuration()
+    val path = new Path(file_path)
+    val fs = path.getFileSystem(conf)
+    val flag = fs.exists(path)
+    flag
   }
 
 }
