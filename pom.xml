@@ -53,6 +53,13 @@
         </dependency>
 
 
+        <dependency>
+            <groupId>commons-dbcp</groupId>
+            <artifactId>commons-dbcp</artifactId>
+            <version>1.4</version>
+            <scope>provided</scope>
+        </dependency>
+
 <!--        <dependency>-->
 <!--            <groupId>net.sf.json-lib</groupId>-->
 <!--            <artifactId>json-lib</artifactId>-->
