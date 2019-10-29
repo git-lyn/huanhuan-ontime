@@ -48,26 +48,31 @@ object OntimeStreaming {
   val groupid = prop.getProperty("kafka.consumer.groupid")
   def main(args: Array[String]): Unit = {
     while(true) {
-      val nowTimes = System.currentTimeMillis();
+     val nowTimes = System.currentTimeMillis();
       val time = new DateTime(nowTimes).toString("yyyy-MM-dd")
      val ssc = StreamingContext.getOrCreate(DateUtils.getCheckpoingDir(),functionToCreateContext)
       ssc.start()
-//      if(isExistsMarkFile(file_path)){
-//        stopByMarkFile(ssc);
-//        // 等待任务终止
-//        ssc.awaitTermination()
-//        return;
-//      }
-//       stopByMarkFile(ssc);
-        ssc.awaitTerminationOrTimeout(resetTime)
-        // 关闭sparkStreaming
-        // ssc.stop(false,true)表示优雅地销毁StreamingContext对象，不能销毁SparkContext对象，
-        // ssc.stop(true,true)会停掉SparkContext对象，程序就直接停了。
-        ssc.stop(false, true)
+    ssc.awaitTerminationOrTimeout(resetTime)
+    ssc.stop(false, true)
+   }
+
+    //   普通方式  ******************
+//    result()
+    // ************************************
+
+    //      if(isExistsMarkFile(file_path)){
+    //        stopByMarkFile(ssc);
+    //        // 等待任务终止
+    //        ssc.awaitTermination()
+    //        return;
+    //      }
+    //       stopByMarkFile(ssc);
+    // 关闭sparkStreaming
+    // ssc.stop(false,true)表示优雅地销毁StreamingContext对象，不能销毁SparkContext对象，
+    // ssc.stop(true,true)会停掉SparkContext对象，程序就直接停了。
         // 根据给定的时间进行停止程序
         // 处理结果集
 //        ssc.awaitTermination()
-    }
   }
 
   /**
@@ -80,10 +85,22 @@ object OntimeStreaming {
     //创建StreamingContext对象
     val ssc = new StreamingContext(sparkConf,Seconds(5));
     // 设置检查点
-    ssc.checkpoint("./streaming_checkpoint")
+    ssc.checkpoint(DateUtils.getCheckpoingDir())
+
+    //创建Kafka的连接参数
+    val kafkaParam = Map[String,String](
+      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> brokenList,
+      //      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> prop.getProperty("kafka.source.key.deserializer"),
+      //      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> prop.getProperty("kafka.source.value.deserializer"),
+      //      "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
+      //      "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
+      ConsumerConfig.GROUP_ID_CONFIG -> groupid,
+      ConsumerConfig.AUTO_OFFSET_RESET_CONFIG -> prop.getProperty("kafka.source.auto.offset.reset")
+    )
+    val textKafkaDStream = KafkaUtils.createDirectStream[String,String,StringDecoder,StringDecoder](ssc,kafkaParam,Set(sourceTopic))
 
     //  从kafka中获取对应的信息流数据
-    val textKafkaDStream = getDStream(sparkConf,ssc)
+//    val textKafkaDStream = getDStream(sparkConf,ssc)
 
     var offsetRanges = Array[OffsetRange]()
     //注意，要想获得offsetRanges必须作为第一步
@@ -93,8 +110,25 @@ object OntimeStreaming {
       rdd
     }
 
+
+    // 进行数据的过滤
+    val filterDstream = textKafkaDStream2.filter{dstream =>
+      val key = dstream._1
+      val value = dstream._2
+      val jsons = JSON.parseObject(value)
+      val content = jsons.getJSONObject("content")
+      val click_position = content.get("click_position")
+      var flag = false
+      if ("app_restart".equals(click_position)) {
+        flag = true
+      } else {
+        flag = false
+      }
+      flag
+    }
+
     // 得到元组结果集
-    val dstream = textKafkaDStream2.map{rdd =>
+    val dstream = filterDstream.map{rdd =>
       val key = rdd._1
       val value = rdd._2
       val jsons = JSON.parseObject(value)
@@ -103,16 +137,45 @@ object OntimeStreaming {
       // 转换成13位的时间戳
       val times = new DateTime(timestamps.toLong * 1000)
       val dates = times.toString("yyyy-MM-dd")  // yyyy-MM-dd HH:mm:ss
+      var user_id = jsons.get("user_id")
       val content = jsons.getJSONObject("content")
-      val user_id = content.get("user_id")
       val deviceID = content.get("deviceID")
-      val gid = content.get("gid")
+      //      var gid = content.get("gid")
+//      var gid = content.get("user_id")
+      if(user_id == "" || user_id == null) {
+        user_id = "-99"
+      }
       val click_position = content.get("click_position")
       // 组合成 2019-09-10_dfdfdoogod-dsfdod--sdf
-      val result = dates + "|" + click_position + "|" + gid
+      val result = dates + "|" + click_position + "|" + user_id
       (result,1L)
     }
 
+//    val aggregatedDStream = dstream.reduceByKey(_ + _)
+
+
+    /**
+     *  使用 mapWithState算子替换updateStateByKey算子进行数据的累加
+     */
+    val mappingFunc = (key: String,value: Option[Long], state: State[Long]) =>{
+      val sum = value.getOrElse(0L) + state.getOption().getOrElse(0L)
+      val output = (key, sum)
+      state.update(sum)
+      output
+    }
+
+    // 实时流量状态更新函数
+//    val mapFunction = (datehour: String, pv: Option[Long], state: State[Long]) => {
+//      val accuSum = pv.getOrElse(0L) + state.getOption().getOrElse(0L)
+//      val output = (datehour, accuSum)
+//      state.update(accuSum)
+//      output
+//    }
+
+    val aggregatedDStream = dstream.mapWithState(StateSpec.function(mappingFunc)).stateSnapshots()
+
+
+/*
     val aggregatedDStream = dstream.updateStateByKey[Long]{(values:Seq[Long], old:Option[Long]) =>
       // 举例来说
       // 对于每个key，都会调用一次这个方法
@@ -135,29 +198,61 @@ object OntimeStreaming {
       }
 
       Some(clickCount)
+    }*/
+
+
+    // 查询数据库，过滤重复的数据
+    val filterDStream = aggregatedDStream.filter{item =>
+      val result = item._1.split("\\|")
+      val date = result(0)
+      val position = result(1)
+      val userid = result(2)
+      val counts = item._2
+      val flag = IndexCountDao.dataFlag(date,position,userid,counts)
+      flag
     }
 
-    // 打印kafka的结果集
-    aggregatedDStream.foreachRDD{rdd =>
+
+    // 打印kafka的结果集   aggregatedDStream
+    filterDStream.foreachRDD{rdd =>
+      // 循环遍历每一个rdd
+//      rdd.foreachPartition{items =>
+//        for(item <- items) {
+//          println("key########: " + item._1 + "     value@@@@@: " + item._2)
+//          //          println("value@@@@@: " + item._2)
+//        }
+//      }
+
       // 循环遍历每一个rdd
       rdd.foreachPartition{items =>
+        // 批量保存数据到数据库
+        val indexCounts = ArrayBuffer[IndexClickCount]()
         for(item <- items) {
           println("key########: " + item._1 + "     value@@@@@: " + item._2)
           //          println("value@@@@@: " + item._2)
+          val result = item._1.split("\\|")
+          val date = result(0)
+          val position = result(1)
+          val userid = result(2)
+          val counts = item._2
+          indexCounts += IndexClickCount(date,position,userid,counts)
+                    IndexCountDao.updateBatch(indexCounts.toArray)
+//          IndexCountDao.insertBatch(indexCounts.toArray)
         }
+
       }
 
       //保存Offset到ZK
-      val updateTopicDirs = new ZKGroupTopicDirs(groupid, sourceTopic)
-      val updateZkClient = new ZkClient(zookeeper)
-      for(offset <- offsetRanges){
-        //将更新写入到Path
-        println(offset)
-        val zkPath = s"${updateTopicDirs.consumerOffsetDir}/${offset.partition}"
-        ZkUtils.updatePersistentPath(updateZkClient, zkPath, offset.fromOffset.toString)
-      }
-      //  关闭与zk的会话连接，否则连接数太多，会报异常：
-      updateZkClient.close()
+//      val updateTopicDirs = new ZKGroupTopicDirs(groupid, sourceTopic)
+//      val updateZkClient = new ZkClient(zookeeper)
+//      for(offset <- offsetRanges){
+//        //将更新写入到Path
+//        println(offset)
+//        val zkPath = s"${updateTopicDirs.consumerOffsetDir}/${offset.partition}"
+//        ZkUtils.updatePersistentPath(updateZkClient, zkPath, offset.fromOffset.toString)
+//      }
+//      //  关闭与zk的会话连接，否则连接数太多，会报异常：
+//      updateZkClient.close()
 
     }
 
@@ -249,11 +344,11 @@ object OntimeStreaming {
 
   // 创建和设置一个新的StreamingContext
   def functionToCreateContext(): StreamingContext ={
-    val stateSpec = StateSpec.function(mapFunction)
+//    val stateSpec = StateSpec.function(mapFunction)
     //创建sparkConf对象 "local[*]"
     val sparkConf = new SparkConf().setMaster(prop.getProperty("spark.ontime.master")).setAppName("OntimeStreaming")
     //创建StreamingContext对象
-    val ssc = new StreamingContext(sparkConf,Seconds(5));
+    val ssc = new StreamingContext(sparkConf,Seconds(prop.getProperty("streaming.context.seconds").toInt));
     // 设置检查点
 //    ssc.checkpoint("./streaming_checkpoint")
     ssc.checkpoint(DateUtils.getCheckpoingDir())
@@ -274,6 +369,8 @@ object OntimeStreaming {
     )
 
     val textKafkaDStream = KafkaUtils.createDirectStream[String,String,StringDecoder,StringDecoder](ssc,kafkaParam,Set(sourceTopic))
+    // 从zk中获取相应的数据流
+//    val textKafkaDStream = getDStream(sparkConf,ssc)
 
     var offsetRanges = Array[OffsetRange]()
     //注意，要想获得offsetRanges必须作为第一步
@@ -310,18 +407,38 @@ object OntimeStreaming {
       val times = new DateTime(timestamps.toLong * 1000)
       val dates = times.toString("yyyy-MM-dd")  // yyyy-MM-dd HH:mm:ss
       val content = jsons.getJSONObject("content")
-      val user_id = content.get("user_id")
+      var user_id = jsons.get("user_id").toString()
       val deviceID = content.get("deviceID")
 //      var gid = content.get("gid")
       var gid = content.get("user_id")
-      if(gid == "" || gid == null) {
-        gid = "-99"
+      if(user_id == "" || user_id == null) {
+        user_id = "-99"
       }
       val click_position = content.get("click_position")
       // 组合成 2019-09-10_dfdfdoogod-dsfdod--sdf
-      val result = dates + "|" + click_position + "|" + gid
+      val result = dates + "|" + click_position + "|" + user_id
       (result,1L)
     }
+
+    /**
+     *  使用 mapWithState算子替换updateStateByKey算子进行数据的累加
+     */
+    val mappingFunc = (key: String,value: Option[Long], state: State[Long]) =>{
+      val sum = value.getOrElse(0L) + state.getOption().getOrElse(0L)
+      val output = (key, sum)
+      state.update(sum)
+      output
+    }
+
+    // 实时流量状态更新函数
+    //    val mapFunction = (datehour: String, pv: Option[Long], state: State[Long]) => {
+    //      val accuSum = pv.getOrElse(0L) + state.getOption().getOrElse(0L)
+    //      val output = (datehour, accuSum)
+    //      state.update(accuSum)
+    //      output
+    //    }
+
+//    val aggregatedDStream = dstream.mapWithState(StateSpec.function(mappingFunc)).stateSnapshots()
 
     val aggregatedDStream = dstream.updateStateByKey[Long]{(values:Seq[Long], old:Option[Long]) =>
       // 举例来说
@@ -347,8 +464,19 @@ object OntimeStreaming {
       Some(clickCount)
     }
 
+    // 查询数据库，过滤重复的数据
+    val filterDStream = aggregatedDStream.filter{item =>
+      val result = item._1.split("\\|")
+      val date = result(0)
+      val position = result(1)
+      val userid = result(2)
+      val counts = item._2
+      val flag = IndexCountDao.dataFlag(date,position,userid,counts)
+      flag
+    }
+
     // 打印kafka的结果集
-    aggregatedDStream.foreachRDD{rdd =>
+    filterDStream.foreachRDD{rdd =>
 
       // 批量保存数据到数据库
       val indexCounts = ArrayBuffer[IndexClickCount]()
