@@ -41,7 +41,7 @@ object IndexCountDao {
     }
 
     // 对于需要插入的数据，执行批量插入操作
-    val insertSQL = "INSERT INTO index_gid_click_count VALUES(?,?,?,?)"
+    val insertSQL = "INSERT INTO index_gid_click_count(date,position,userid,clickCount) VALUES(?,?,?,?)"
 
     val insertParamsList: ArrayBuffer[Array[Any]] = ArrayBuffer[Array[Any]]()
 
@@ -105,7 +105,7 @@ object IndexCountDao {
 //    }
 
     // 对于需要插入的数据，执行批量插入操作
-    val insertSQL = "INSERT INTO index_gid_click_count VALUES(?,?,?,?)"
+    val insertSQL = "INSERT INTO index_gid_click_count(date,position,userid,clickCount) VALUES(?,?,?,?)"
 
     val insertParamsList: ArrayBuffer[Array[Any]] = ArrayBuffer[Array[Any]]()
 
@@ -133,6 +133,38 @@ object IndexCountDao {
 
     // 使用完成后将对象返回给对象池
     mySqlPool.returnObject(client)
+  }
+
+  def dataFlag(date: String, position: String, userid: String,clickCount: Long): Boolean = {
+    // 获取对象池单例对象
+    val mySqlPool = CreateMySqlPool()
+    // 从对象池中提取对象
+    val client = mySqlPool.borrowObject()
+    var flag = false;
+    val selectSQL = "SELECT count(*) " +
+      "FROM index_gid_click_count " +
+      "WHERE date=? " +
+      "AND position=? " +
+      "AND userid=?" +
+      "AND clickCount=?"
+
+    val params = Array[Any](date, position,userid, clickCount)
+
+    // 根据多个条件查询指定用户的点击量，将查询结果累加到clickCount中
+    client.executeQuery(selectSQL, params, new QueryCallback {
+      override def process(rs: ResultSet): Unit = {
+        if (rs.next() && rs.getInt(1) > 0) {
+          // 如果有数据，就返回false，数据会被过滤掉
+          flag = false
+        } else {
+          // 如果没有数据,返回false
+          flag = true
+        }
+      }
+    })
+    // 使用完成后将对象返回给对象池
+    mySqlPool.returnObject(client)
+    flag
   }
 
 }
